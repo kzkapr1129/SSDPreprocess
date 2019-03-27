@@ -6,9 +6,7 @@
 #include <sys/stat.h>
 
 // ======== 前処理パラメータ
-static const int SPLIT_SIZE = 3;
-static const float BRIGHTNESS_SCALE_START = 0.7;
-static const float BRIGHTNESS_SCALE_END = 1.3;
+static const int SPLIT_SIZE = 2;
 
 // ======== アプリパラメータ
 static const std::string OUT_FOLDER = "out";
@@ -35,49 +33,46 @@ struct ImgStore {
 	ImgStore() : index(0) {}
 };
 
-static void splitWimage(const cv::Mat& frame, std::vector<cv::Mat>& imgs) {
-	cv::Size size(frame.rows, frame.rows);
+static void splitWimage(const cv::Mat& frame, std::vector<cv::Mat>& imgs, int paddingX, int paddingY, int numsplit) {
+	cv::Size size(frame.rows-paddingY, frame.rows-paddingY);
 
-	int addVal = ((frame.cols - frame.rows) / SPLIT_SIZE);
+	int addVal = ((frame.cols - frame.rows - paddingX) / numsplit);
 
-	for (int i = 0; i + size.width < frame.cols; i += addVal) {
-		cv::Rect rect(cv::Point(i, 0), size);
+	for (int i = 0; i + size.width + paddingX < frame.cols; i += addVal) {
+		cv::Rect rect(cv::Point(i+paddingX, paddingY), size);
 		cv::Mat roi = frame(rect);
 		imgs.push_back(roi.clone());
 	}
 }
 
-static void splitHImage(const cv::Mat& frame, std::vector<cv::Mat>& imgs) {
-	cv::Size size(frame.cols, frame.cols);
+static void splitHImage(const cv::Mat& frame, std::vector<cv::Mat>& imgs, int paddingX, int paddingY, int numsplit) {
+	cv::Size size(frame.cols-paddingX, frame.cols-paddingX);
 
-	int addVal = ((frame.rows - frame.cols) / SPLIT_SIZE);
+	int addVal = ((frame.rows - frame.cols - paddingY) / numsplit);
 
 	for (int i = 0; i + size.height < frame.rows; i += addVal) {
-		cv::Rect rect(cv::Point(0, i), size);
+		cv::Rect rect(cv::Point(paddingX, i+paddingY), size);
 		cv::Mat roi = frame(rect);
 		imgs.push_back(roi.clone());
 	}
 }
 
-static void splitImage(const cv::Mat& frame, std::vector<cv::Mat>& imgs) {
+static void splitImage(const cv::Mat& frame, std::vector<cv::Mat>& imgs, int paddingX, int paddingY, int numsplit) {
 	float aspect = (float)frame.cols / (float)frame.rows;
 	if (1 <= aspect) {
-		splitWimage(frame, imgs);
+		splitWimage(frame, imgs, paddingX, paddingY, numsplit);
 	} else {
-		splitHImage(frame, imgs);
+		splitHImage(frame, imgs, paddingX, paddingY, numsplit);
 	}
 }
 
-static void randamCorrectBrightness(std::mt19937& mt, cv::Mat& frame) {
+static void correctBrightness(cv::Mat& frame, float bright_scale) {
 	cv::Mat hsv;
 	cv::cvtColor(frame, hsv, cv::COLOR_BGR2HSV);
 
-	float scale_range = BRIGHTNESS_SCALE_END - BRIGHTNESS_SCALE_START;
-	float rndScale = BRIGHTNESS_SCALE_START + scale_range * ((mt()%10001) / 10000.f);
-
 	std::vector<cv::Mat> channels;
 	cv::split(hsv, channels);
-	channels[2] *= rndScale;
+	channels[2] *= bright_scale;
 	cv::merge(channels, hsv);
 	cv::cvtColor(hsv, frame, cv::COLOR_HSV2BGR);
 }
@@ -109,10 +104,21 @@ static cv::Mat& randamRota(std::mt19937& mt, cv::Mat& frame) {
 }
 
 int main(int argc, char* argv[]) {
-	if (argc != 2) {
-		fprintf(stderr, "usage: %s video_name\n", argv[0]);
+	if (argc != 6) {
+		fprintf(stderr, "usage: %s video_name brightness_scale paddingx paddingy numsplit\n", argv[0]);
 		return -1;
 	}
+
+	// 明度補正値
+	float bright_scale = atof(argv[2]);
+	if (bright_scale <= 0) {
+		fprintf(stderr, "invalid brightness scale: %f\n", bright_scale);
+		return -1;
+	}
+
+	int paddingX = atoi(argv[3]);
+	int paddingY = atoi(argv[4]);
+	int numsplit = atoi(argv[5]);
 
 	// 動画ファイルのopen
 	cv::VideoCapture cap(argv[1]);
@@ -141,11 +147,11 @@ int main(int argc, char* argv[]) {
 		}
 
 		// 明度補正
-		randamCorrectBrightness(mt, frame);
+		correctBrightness(frame, bright_scale);
 
 		// 正方画像になるように画像分割する
 		std::vector<cv::Mat> imgs;
-		splitImage(frame, imgs);
+		splitImage(frame, imgs, paddingX, paddingY, numsplit);
 
 		for (auto it = imgs.begin(); it != imgs.end(); it++) {
 			store.save(randamRota(mt, *it));
