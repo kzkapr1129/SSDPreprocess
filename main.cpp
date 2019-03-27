@@ -104,8 +104,8 @@ static cv::Mat& randamRota(std::mt19937& mt, cv::Mat& frame) {
 }
 
 int main(int argc, char* argv[]) {
-	if (argc != 6) {
-		fprintf(stderr, "usage: %s video_name brightness_scale paddingx paddingy numsplit\n", argv[0]);
+	if (argc != 8) {
+		fprintf(stderr, "usage: %s video_name brightness_scale paddingx paddingy numsplit rota_randam num_skip_frame\n", argv[0]);
 		return -1;
 	}
 
@@ -119,6 +119,8 @@ int main(int argc, char* argv[]) {
 	int paddingX = atoi(argv[3]);
 	int paddingY = atoi(argv[4]);
 	int numsplit = atoi(argv[5]);
+	bool rota_randam = atoi(argv[6]) != 0 ? true : false;
+	int skipFrame = atoi(argv[7]);
 
 	// 動画ファイルのopen
 	cv::VideoCapture cap(argv[1]);
@@ -138,6 +140,7 @@ int main(int argc, char* argv[]) {
 	std::mt19937 mt(rnd());
 
 	// ビデオファイル読み込み開始
+	int skip = 0;
 	while (true) {
 		cv::Mat frame;
 		cap >> frame;
@@ -145,6 +148,11 @@ int main(int argc, char* argv[]) {
 		if (frame.empty()) {
 			break;
 		}
+
+		if ((skip++ % skipFrame) != 0) {
+			continue;
+		}
+		
 
 		// 明度補正
 		correctBrightness(frame, bright_scale);
@@ -154,7 +162,12 @@ int main(int argc, char* argv[]) {
 		splitImage(frame, imgs, paddingX, paddingY, numsplit);
 
 		for (auto it = imgs.begin(); it != imgs.end(); it++) {
-			store.save(randamRota(mt, *it));
+
+			cv::Mat img = *it;
+			if (rota_randam) {
+				img = randamRota(mt, img);
+			}
+			store.save(img);
 		}
 	}
 

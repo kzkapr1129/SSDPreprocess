@@ -9,7 +9,7 @@
 			"type": "cppdbg",
 			"request": "launch",
 			"program": "${workspaceFolder}/a.out",
-			"args": ["MOV_0012.mp4"],
+			"args": ["MOV_0020.mp4", "1.2", "80", "0", "1", "0", "15"],
 			"stopAtEntry": false,
 			"cwd": "${workspaceFolder}",
 			"environment": [],
